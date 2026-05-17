@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>CamVault — Supabase Camera Capture</title>
+
+  <!-- Supabase JS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Google Fonts: Syne (display) + DM Mono (mono accents) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+
+  <style>
+    /* ─────────────────────────────────────────
+       CSS CUSTOM PROPERTIES
+    ───────────────────────────────────────── */
+    :root {
+      --bg:          #0a0a0f;
+      --surface:     #12121a;
+      --surface2:    #1c1c28;
+      --border:      #2a2a3a;
+      --accent:      #00e5ff;
+      --accent2:     #7c3aed;
+      --accent3:     #f59e0b;
+      --danger:      #ef4444;
+      --success:     #10b981;
+      --text:        #e8e8f0;
+      --text-muted:  #6b6b80;
+      --radius:      14px;
+      --radius-sm:   8px;
+      --shadow:      0 8px 32px rgba(0,0,0,0.5);
+      --glow:        0 0 20px rgba(0,229,255,0.25);
+      --font-display: 'Syne', sans-serif;
+      --font-mono:    'DM Mono', monospace;
+      --transition:   0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* ─────────────────────────────────────────
+       RESET & BASE
+    ───────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--font-display);
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      /* Subtle grid background */
+      background-image:
+        linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ─────────────────────────────────────────
+       NOISE OVERLAY
+    ───────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─────────────────────────────────────────
+       LAYOUT WRAPPER
+    ───────────────────────────────────────── */
+    .wrapper {
+      position: relative;
+      z-index: 1;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 60px;
+    }
+
+    /* ─────────────────────────────────────────
+       HEADER
+    ───────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 44px;
+      height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: var(--glow);
+    }
+
+    .logo-text {
+      font-size: 1.6rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, var(--text), var(--text-muted));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .badge {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+    }
+
+    /* ─────────────────────────────────────────
+       MAIN GRID
+    ───────────────────────────────────────── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+      align-items: start;
+    }
+
+    @media (max-width: 820px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ─────────────────────────────────────────
+       CARD BASE
+    ───────────────────────────────────────── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .card-title {
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    /* ─────────────────────────────────────────
+       CAMERA SECTION
+    ───────────────────────────────────────── */
+    .camera-card .card-body { padding: 20px; }
+
+    .video-container {
+      position: relative;
+      background: #000;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      aspect-ratio: 16/9;
+      border: 1px solid var(--border);
+    }
+
+    #video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transform: scaleX(-1); /* Mirror effect for selfie feel */
+    }
+
+    /* Scanline overlay on video */
+    .video-container::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0,0,0,0.07) 2px,
+        rgba(0,0,0,0.07) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* Corner brackets */
+    .video-container::before {
+      content: '';
+      position: absolute;
+      inset: 12px;
+      border: 1px solid transparent;
+      border-image: none;
+      box-shadow:
+        inset 14px 14px 0 0 var(--accent),
+        inset -14px 14px 0 0 var(--accent),
+        inset 14px -14px 0 0 var(--accent),
+        inset -14px -14px 0 0 var(--accent);
+      border-radius: 2px;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity var(--transition);
+      z-index: 2;
+    }
+
+    .video-active .video-container::before { opacity: 0.5; }
+
+    /* Camera idle state */
+    .cam-idle {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      z-index: 1;
+    }
+
+    .cam-idle-icon { font-size: 3rem; opacity: 0.3; }
+
+    /* REC indicator */
+    .rec-badge {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(0,0,0,0.65);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 99px;
+      padding: 5px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity var(--transition);
+      z-index: 3;
+    }
+
+    .rec-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--danger);
+      animation: pulse-dot 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.8); }
+    }
+
+    .video-active .rec-badge { opacity: 1; }
+
+    /* Auto-capture badge */
+    .auto-badge {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      background: rgba(124,58,237,0.75);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(124,58,237,0.4);
+      border-radius: 99px;
+      padding: 5px 12px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      color: #fff;
+      opacity: 0;
+      transition: opacity var(--transition);
+      z-index: 3;
+    }
+
+    .auto-active .auto-badge { opacity: 1; }
+
+    /* ─────────────────────────────────────────
+       HIDDEN CANVAS
+    ───────────────────────────────────────── */
+    #canvas { display: none; }
+
+    /* ─────────────────────────────────────────
+       CONTROLS
+    ───────────────────────────────────────── */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 18px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      flex: 1;
+      min-width: 120px;
+      padding: 12px 18px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-display);
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      transition: all var(--transition);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: rgba(255,255,255,0);
+      transition: background var(--transition);
+    }
+
+    .btn:hover:not(:disabled)::before { background: rgba(255,255,255,0.08); }
+    .btn:active:not(:disabled) { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Primary — Start Camera */
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent) 0%, #0080ff 100%);
+      color: #000;
+      box-shadow: 0 4px 16px rgba(0,229,255,0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 6px 24px rgba(0,229,255,0.5);
+      transform: translateY(-1px);
+    }
+
+    /* Accent — Capture */
+    .btn-capture {
+      background: linear-gradient(135deg, var(--accent2) 0%, #a855f7 100%);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(124,58,237,0.3);
+    }
+    .btn-capture:hover:not(:disabled) {
+      box-shadow: 0 6px 24px rgba(124,58,237,0.5);
+      transform: translateY(-1px);
+    }
+
+    /* Danger — Stop */
+    .btn-danger {
+      background: var(--surface2);
+      color: var(--danger);
+      border: 1px solid rgba(239,68,68,0.3);
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(239,68,68,0.12);
+      border-color: var(--danger);
+    }
+
+    /* Toggle — Auto-capture */
+    .btn-auto {
+      background: var(--surface2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+    .btn-auto.active {
+      color: var(--accent2);
+      border-color: var(--accent2);
+      background: rgba(124,58,237,0.12);
+    }
+    .btn-auto:hover:not(:disabled) { border-color: var(--text-muted); color: var(--text); }
+
+    /* ─────────────────────────────────────────
+       STATUS BAR
+    ───────────────────────────────────────── */
+    .status-bar {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: border-color var(--transition);
+    }
+
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      flex-shrink: 0;
+      transition: background var(--transition);
+    }
+
+    .status-bar.loading .status-dot { background: var(--accent3); animation: pulse-dot 0.8s infinite; }
+    .status-bar.success .status-dot { background: var(--success); }
+    .status-bar.error   .status-dot { background: var(--danger); }
+    .status-bar.info    .status-dot { background: var(--accent); }
+
+    .status-bar.loading { border-color: rgba(245,158,11,0.4); }
+    .status-bar.success { border-color: rgba(16,185,129,0.4); }
+    .status-bar.error   { border-color: rgba(239,68,68,0.4); }
+    .status-bar.info    { border-color: rgba(0,229,255,0.4); }
+
+    #status-text { color: var(--text); }
+
+    /* ─────────────────────────────────────────
+       SIDEBAR / CONFIG CARD
+    ───────────────────────────────────────── */
+    .config-card .card-body { padding: 20px; }
+
+    .field-group { margin-bottom: 18px; }
+
+    .field-label {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    .field-input {
+      width: 100%;
+      padding: 10px 14px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      outline: none;
+      transition: border-color var(--transition), box-shadow var(--transition);
+    }
+
+    .field-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(0,229,255,0.12);
+    }
+
+    .field-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+
+    .apply-btn {
+      width: 100%;
+      padding: 11px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: var(--font-display);
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      letter-spacing: 0.03em;
+    }
+
+    .apply-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: rgba(0,229,255,0.06);
+    }
+
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .stat-box {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 800;
+      color: var(--accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      margin-top: 4px;
+    }
+
+    /* Interval input */
+    .interval-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 12px;
+    }
+
+    .interval-row .field-input { flex: 1; }
+
+    .interval-label {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+    }
+
+    /* ─────────────────────────────────────────
+       GALLERY SECTION
+    ───────────────────────────────────────── */
+    .gallery-section { margin-top: 28px; }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 18px;
+      height: 2px;
+      background: var(--accent);
+    }
+
+    .clear-btn {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+
+    .clear-btn:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* Gallery grid */
+    #gallery {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+    }
+
+    .gallery-empty {
+      grid-column: 1/-1;
+      padding: 48px 20px;
+      text-align: center;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      letter-spacing: 0.06em;
+    }
+
+    .gallery-empty-icon { font-size: 2.5rem; opacity: 0.25; margin-bottom: 10px; }
+
+    /* Gallery item */
+    .gallery-item {
+      position: relative;
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      aspect-ratio: 4/3;
+      cursor: pointer;
+      group: 'item';
+      transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition);
+      animation: fade-in-up 0.35s ease both;
+    }
+
+    @keyframes fade-in-up {
+      from { opacity: 0; transform: translateY(10px) scale(0.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .gallery-item:hover {
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+      border-color: var(--accent);
+    }
+
+    .gallery-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform var(--transition);
+    }
+
+    .gallery-item:hover img { transform: scale(1.05); }
+
+    /* Item overlay */
+    .gallery-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 60%);
+      opacity: 0;
+      transition: opacity var(--transition);
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      padding: 10px;
+    }
+
+    .gallery-item:hover .gallery-overlay { opacity: 1; }
+
+    .gallery-ts {
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: rgba(255,255,255,0.7);
+      letter-spacing: 0.06em;
+    }
+
+    .gallery-open-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--accent);
+      text-decoration: none;
+      margin-top: 4px;
+    }
+
+    /* New badge */
+    .item-badge {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--accent);
+      color: #000;
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 99px;
+      letter-spacing: 0.08em;
+    }
+
+    /* ─────────────────────────────────────────
+       LIGHTBOX
+    ───────────────────────────────────────── */
+    #lightbox {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.92);
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s;
+    }
+
+    #lightbox.open { opacity: 1; pointer-events: all; }
+
+    #lightbox img {
+      max-width: 92vw;
+      max-height: 88vh;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transform: scale(0.95);
+      transition: transform 0.25s;
+    }
+
+    #lightbox.open img { transform: scale(1); }
+
+    .lightbox-close {
+      position: absolute;
+      top: 22px;
+      right: 26px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition);
+    }
+
+    .lightbox-close:hover { background: var(--danger); border-color: var(--danger); }
+
+    /* ─────────────────────────────────────────
+       FLASH EFFECT ON CAPTURE
+    ───────────────────────────────────────── */
+    #flash {
+      position: fixed;
+      inset: 0;
+      background: #fff;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 998;
+    }
+
+    @keyframes flash-anim {
+      0%   { opacity: 0.75; }
+      100% { opacity: 0; }
+    }
+
+    #flash.flash { animation: flash-anim 0.3s ease-out forwards; }
+
+    /* ─────────────────────────────────────────
+       PROGRESS BAR
+    ───────────────────────────────────────── */
+    .progress-bar {
+      height: 2px;
+      background: var(--border);
+      border-radius: 1px;
+      overflow: hidden;
+      margin-top: 10px;
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+
+    .progress-bar.active { opacity: 1; }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 1px;
+      width: 0%;
+      transition: width 0.3s linear;
+    }
+
+    /* ─────────────────────────────────────────
+       FOOTER
+    ───────────────────────────────────────── */
+    footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .footer-text {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+    }
+
+    .footer-links {
+      display: flex;
+      gap: 18px;
+    }
+
+    .footer-links a {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-decoration: none;
+      transition: color var(--transition);
+    }
+
+    .footer-links a:hover { color: var(--accent); }
+
+    /* ─────────────────────────────────────────
+       RESPONSIVE TWEAKS
+    ───────────────────────────────────────── */
+    @media (max-width: 520px) {
+      .controls { flex-direction: column; }
+      .btn { min-width: unset; }
+      #gallery { grid-template-columns: repeat(2, 1fr); }
+      .logo-text { font-size: 1.3rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Flash effect layer -->
+<div id="flash"></div>
+
+<!-- Lightbox -->
+<div id="lightbox">
+  <button class="lightbox-close" id="lightbox-close" aria-label="Close">✕</button>
+  <img id="lightbox-img" src="" alt="Full size capture"/>
+</div>
+
+<div class="wrapper">
+
+  <!-- ══════════════════════════════════════
+       HEADER
+  ══════════════════════════════════════ -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon">📷</div>
+      <span class="logo-text">CamVault</span>
+    </div>
+    <span class="badge">SUPABASE · v2.0</span>
+  </header>
+
+  <!-- ══════════════════════════════════════
+       MAIN GRID
+  ══════════════════════════════════════ -->
+  <div class="main-grid">
+
+    <!-- Camera Column -->
+    <div>
+      <div class="card camera-card" id="camera-card">
+        <div class="card-header">
+          <span class="card-title">Camera Preview</span>
+          <span class="badge" id="res-label">OFFLINE</span>
+        </div>
+        <div class="card-body">
+
+          <!-- Video preview -->
+          <div class="video-container" id="video-container">
+            <div class="cam-idle" id="cam-idle">
+              <div class="cam-idle-icon">⬛</div>
+              <span>Press "Start Camera" to begin</span>
+            </div>
+            <video id="video" autoplay playsinline muted></video>
+            <div class="rec-badge">
+              <div class="rec-dot"></div> LIVE
+            </div>
+            <div class="auto-badge" id="auto-badge">AUTO ⏱</div>
+          </div>
+
+          <!-- Hidden canvas for capture -->
+          <canvas id="canvas"></canvas>
+
+          <!-- Controls -->
+          <div class="controls">
+            <button class="btn btn-primary" id="btn-start">
+              ▶ Start Camera
+            </button>
+            <button class="btn btn-capture" id="btn-capture" disabled>
+              ◉ Capture & Upload
+            </button>
+            <button class="btn btn-danger" id="btn-stop" disabled>
+              ◼ Stop
+            </button>
+          </div>
+
+          <!-- Auto capture toggle row -->
+          <div class="controls" style="margin-top:10px;">
+            <button class="btn btn-auto" id="btn-auto" disabled>
+              ⏱ Auto Capture: OFF
+            </button>
+          </div>
+
+          <!-- Status bar -->
+          <div class="status-bar" id="status-bar">
+            <div class="status-dot" id="status-dot"></div>
+            <span id="status-text">Awaiting camera access…</span>
+          </div>
+
+          <!-- Progress bar -->
+          <div class="progress-bar" id="progress-bar">
+            <div class="progress-fill" id="progress-fill"></div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar / Config Column -->
+    <div>
+      <div class="card config-card">
+        <div class="card-header">
+          <span class="card-title">Supabase Config</span>
+        </div>
+        <div class="card-body">
+
+          <div class="field-group">
+            <label class="field-label" for="inp-url">Project URL</label>
+            <input
+              id="inp-url"
+              class="field-input"
+              type="text"
+              placeholder="https://xxxx.supabase.co"
+              spellcheck="false"
+            />
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="inp-key">Anon / Public Key</label>
+            <input
+              id="inp-key"
+              class="field-input"
+              type="password"
+              placeholder="eyJhbGciOiJIUzI1NiIsInR..."
+              spellcheck="false"
+            />
+          </div>
+
+          <button class="apply-btn" id="btn-apply">⚡ Apply & Connect</button>
+
+          <!-- Interval config -->
+          <div style="margin-top:18px;">
+            <span class="field-label">Auto-Capture Interval</span>
+            <div class="interval-row">
+              <input
+                id="inp-interval"
+                class="field-input"
+                type="number"
+                value="2"
+                min="1"
+                max="60"
+              />
+              <span class="interval-label">seconds</span>
+            </div>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-row">
+            <div class="stat-box">
+              <div class="stat-value" id="stat-count">0</div>
+              <div class="stat-label">Captured</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-value" id="stat-uploaded" style="color:var(--success)">0</div>
+              <div class="stat-label">Uploaded</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /.main-grid -->
+
+  <!-- ══════════════════════════════════════
+       GALLERY
+  ══════════════════════════════════════ -->
+  <div class="gallery-section">
+    <div class="section-header">
+      <span class="section-title">Photo Gallery</span>
+      <button class="clear-btn" id="btn-clear">Clear Gallery</button>
+    </div>
+    <div id="gallery">
+      <div class="gallery-empty">
+        <div class="gallery-empty-icon">🖼</div>
+        <div>No photos yet — capture something!</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer>
+    <span class="footer-text">CamVault · Supabase Storage Integration</span>
+    <div class="footer-links">
+      <a href="https://supabase.com/docs" target="_blank">Supabase Docs</a>
+      <a href="https://supabase.com/docs/guides/storage" target="_blank">Storage Guide</a>
+    </div>
+  </footer>
+
+</div><!-- /.wrapper -->
+
+
+<script>
+/* ══════════════════════════════════════════════════════
+   CamVault — Camera + Supabase Integration
+   ══════════════════════════════════════════════════════
+
+   QUICK SETUP:
+   1. Paste your Supabase URL and Anon Key into the sidebar
+      inputs (or hardcode them in DEFAULT_CONFIG below).
+   2. Click "Apply & Connect".
+   3. Click "Start Camera", then "Capture & Upload".
+
+   SUPABASE REQUIREMENTS:
+   - Storage bucket named "photos" (set to public).
+   - Table named "photos" with columns:
+       id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+       image_url   text,
+       created_at  timestamp DEFAULT now()
+   ══════════════════════════════════════════════════════ */
+
+  /* ─── DEFAULT CONFIG (optional hardcode) ─── */
+  const DEFAULT_CONFIG = {
+    url:    'YOUR_SUPABASE_URL',   // e.g. https://abcdefg.supabase.co
+    anonKey:'YOUR_SUPABASE_ANON_KEY'
+  };
+
+  /* ─────────────────────────────────────────
+     STATE
+  ───────────────────────────────────────── */
+  let supabaseClient  = null;   // Supabase client instance
+  let mediaStream     = null;   // Active MediaStream
+  let autoInterval    = null;   // setInterval handle for auto-capture
+  let captureCount    = 0;      // Total captures this session
+  let uploadedCount   = 0;      // Successful uploads this session
+  let isAutoActive    = false;  // Auto-capture running?
+
+  /* ─────────────────────────────────────────
+     DOM REFS
+  ───────────────────────────────────────── */
+  const video        = document.getElementById('video');
+  const canvas       = document.getElementById('canvas');
+  const btnStart     = document.getElementById('btn-start');
+  const btnCapture   = document.getElementById('btn-capture');
+  const btnStop      = document.getElementById('btn-stop');
+  const btnAuto      = document.getElementById('btn-auto');
+  const btnApply     = document.getElementById('btn-apply');
+  const btnClear     = document.getElementById('btn-clear');
+  const statusBar    = document.getElementById('status-bar');
+  const statusText   = document.getElementById('status-text');
+  const statusDot    = document.getElementById('status-dot');
+  const progressBar  = document.getElementById('progress-bar');
+  const progressFill = document.getElementById('progress-fill');
+  const gallery      = document.getElementById('gallery');
+  const statCount    = document.getElementById('stat-count');
+  const statUploaded = document.getElementById('stat-uploaded');
+  const resLabel     = document.getElementById('res-label');
+  const cameraCard   = document.getElementById('camera-card');
+  const videoContainer = document.getElementById('video-container');
+  const camIdle      = document.getElementById('cam-idle');
+  const autoBadge    = document.getElementById('auto-badge');
+  const inpUrl       = document.getElementById('inp-url');
+  const inpKey       = document.getElementById('inp-key');
+  const inpInterval  = document.getElementById('inp-interval');
+  const lightbox     = document.getElementById('lightbox');
+  const lightboxImg  = document.getElementById('lightbox-img');
+  const lightboxClose= document.getElementById('lightbox-close');
+  const flashEl      = document.getElementById('flash');
+
+  /* ─────────────────────────────────────────
+     INIT — Pre-fill config inputs
+  ───────────────────────────────────────── */
+  inpUrl.value = DEFAULT_CONFIG.url    !== 'YOUR_SUPABASE_URL'     ? DEFAULT_CONFIG.url    : '';
+  inpKey.value = DEFAULT_CONFIG.anonKey !== 'YOUR_SUPABASE_ANON_KEY' ? DEFAULT_CONFIG.anonKey : '';
+
+  // Auto-connect if hardcoded values are real
+  if (inpUrl.value && inpKey.value) initSupabase();
+
+  /* ─────────────────────────────────────────
+     STATUS HELPER
+  ───────────────────────────────────────── */
+  function setStatus(msg, type = 'idle') {
+    // type: idle | info | loading | success | error
+    statusText.textContent = msg;
+    statusBar.className = 'status-bar ' + type;
+  }
+
+  /* ─────────────────────────────────────────
+     PROGRESS HELPER
+  ───────────────────────────────────────── */
+  function showProgress(pct) {
+    progressBar.classList.toggle('active', pct > 0 && pct < 100);
+    progressFill.style.width = pct + '%';
+  }
+
+  /* ─────────────────────────────────────────
+     FLASH EFFECT
+  ───────────────────────────────────────── */
+  function triggerFlash() {
+    flashEl.classList.remove('flash');
+    // Force reflow to restart animation
+    void flashEl.offsetWidth;
+    flashEl.classList.add('flash');
+  }
+
+  /* ─────────────────────────────────────────
+     INIT SUPABASE
+  ───────────────────────────────────────── */
+  function initSupabase() {
+    const url = inpUrl.value.trim();
+    const key = inpKey.value.trim();
+
+    if (!url || !key) {
+      setStatus('⚠ Please enter Supabase URL and Anon Key.', 'error');
+      return false;
+    }
+
+    try {
+      // Create client using global supabase object from CDN
+      supabaseClient = supabase.createClient(url, key);
+      setStatus('✓ Supabase connected — ready to capture.', 'success');
+      return true;
+    } catch (e) {
+      setStatus('✕ Supabase init failed: ' + e.message, 'error');
+      console.error('[CamVault] Supabase init error:', e);
+      return false;
+    }
+  }
+
+  /* ─────────────────────────────────────────
+     APPLY BUTTON
+  ───────────────────────────────────────── */
+  btnApply.addEventListener('click', () => {
+    initSupabase();
+  });
+
+  /* ─────────────────────────────────────────
+     START CAMERA
+  ───────────────────────────────────────── */
+  btnStart.addEventListener('click', async () => {
+    setStatus('📷 Requesting camera access…', 'loading');
+
+    // Prefer environment (rear) camera on mobile, user on desktop
+    const constraints = {
+      video: {
+        facingMode: 'user',
+        width:  { ideal: 1280 },
+        height: { ideal: 720 }
+      },
+      audio: false
+    };
+
+    try {
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      video.srcObject = mediaStream;
+
+      // Wait for video metadata to load
+      await new Promise(res => { video.onloadedmetadata = res; });
+
+      // Update resolution badge
+      resLabel.textContent = `${video.videoWidth}×${video.videoHeight}`;
+
+      // Show camera live UI
+      camIdle.style.display = 'none';
+      videoContainer.classList.add('video-active');
+
+      // Enable / disable buttons
+      btnStart.disabled   = true;
+      btnCapture.disabled = false;
+      btnStop.disabled    = false;
+      btnAuto.disabled    = false;
+
+      setStatus('✓ Camera Started — ' + video.videoWidth + '×' + video.videoHeight, 'success');
+    } catch (err) {
+      setStatus('✕ Camera error: ' + err.message, 'error');
+      console.error('[CamVault] Camera access error:', err);
+    }
+  });
+
+  /* ─────────────────────────────────────────
+     STOP CAMERA
+  ───────────────────────────────────────── */
+  btnStop.addEventListener('click', () => {
+    stopCamera();
+  });
+
+  function stopCamera() {
+    // Stop all tracks
+    if (mediaStream) {
+      mediaStream.getTracks().forEach(t => t.stop());
+      mediaStream = null;
+    }
+
+    // Stop auto-capture if running
+    if (autoInterval) stopAutoCapture();
+
+    video.srcObject = null;
+    camIdle.style.display = 'flex';
+    videoContainer.classList.remove('video-active');
+    resLabel.textContent = 'OFFLINE';
+
+    btnStart.disabled   = false;
+    btnCapture.disabled = true;
+    btnStop.disabled    = true;
+    btnAuto.disabled    = true;
+
+    setStatus('◼ Camera stopped.', 'idle');
+  }
+
+  /* ─────────────────────────────────────────
+     CAPTURE + UPLOAD
+  ───────────────────────────────────────── */
+  btnCapture.addEventListener('click', () => {
+    captureAndUpload();
+  });
+
+  async function captureAndUpload() {
+    if (!mediaStream) {
+      setStatus('⚠ No camera active.', 'error');
+      return;
+    }
+
+    if (!supabaseClient) {
+      // Try init with current inputs
+      if (!initSupabase()) return;
+    }
+
+    /* 1. Capture frame from video → canvas */
+    const w = video.videoWidth  || 1280;
+    const h = video.videoHeight || 720;
+    canvas.width  = w;
+    canvas.height = h;
+
+    const ctx = canvas.getContext('2d');
+    // Mirror the canvas to match video display
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(video, 0, 0, w, h);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform
+
+    captureCount++;
+    statCount.textContent = captureCount;
+    triggerFlash();
+
+    setStatus('📸 Captured! Converting to blob…', 'loading');
+    showProgress(20);
+
+    /* 2. Convert canvas to Blob */
+    let blob;
+    try {
+      blob = await new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/jpeg', 0.88);
+      });
+    } catch (e) {
+      setStatus('✕ Image conversion failed: ' + e.message, 'error');
+      showProgress(0);
+      return;
+    }
+
+    showProgress(40);
+    setStatus('⬆ Uploading to Supabase Storage…', 'loading');
+
+    /* 3. Upload to Supabase Storage bucket "photos" */
+    const filename  = `capture_${Date.now()}_${Math.random().toString(36).slice(2,8)}.jpg`;
+    const filePath  = `public/${filename}`;
+
+    let publicUrl;
+    try {
+      const { data: uploadData, error: uploadError } = await supabaseClient
+        .storage
+        .from('photos')
+        .upload(filePath, blob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) throw uploadError;
+
+      showProgress(70);
+
+      /* 4. Generate public URL */
+      const { data: urlData } = supabaseClient
+        .storage
+        .from('photos')
+        .getPublicUrl(filePath);
+
+      publicUrl = urlData.publicUrl;
+
+      if (!publicUrl) throw new Error('Could not generate public URL.');
+
+    } catch (e) {
+      setStatus('✕ Upload failed: ' + e.message, 'error');
+      showProgress(0);
+      console.error('[CamVault] Storage upload error:', e);
+      return;
+    }
+
+    showProgress(85);
+    setStatus('💾 Saving URL to database…', 'loading');
+
+    /* 5. Save image URL to "photos" table */
+    try {
+      const { error: dbError } = await supabaseClient
+        .from('photos')
+        .insert([{ image_url: publicUrl }]);
+
+      if (dbError) throw dbError;
+
+    } catch (e) {
+      // Non-fatal — show in gallery but warn
+      console.warn('[CamVault] DB insert warning:', e.message);
+      setStatus('⚠ Uploaded but DB save failed: ' + e.message, 'loading');
+    }
+
+    showProgress(100);
+
+    uploadedCount++;
+    statUploaded.textContent = uploadedCount;
+
+    setStatus('✓ Upload Success! Photo saved.', 'success');
+    setTimeout(() => showProgress(0), 600);
+
+    /* 6. Show in gallery */
+    addToGallery(publicUrl, canvas.toDataURL('image/jpeg', 0.7));
+  }
+
+  /* ─────────────────────────────────────────
+     ADD PHOTO TO GALLERY
+  ───────────────────────────────────────── */
+  function addToGallery(publicUrl, previewDataUrl) {
+    // Remove empty state if present
+    const empty = gallery.querySelector('.gallery-empty');
+    if (empty) empty.remove();
+
+    const now = new Date();
+    const ts  = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+    const item = document.createElement('div');
+    item.className = 'gallery-item';
+
+    // Use data URL for instant preview, fall back to public URL
+    const src = previewDataUrl || publicUrl;
+
+    item.innerHTML = `
+      <img src="${src}" alt="Captured photo at ${ts}" loading="lazy"/>
+      <div class="gallery-overlay">
+        <span class="gallery-ts">${ts}</span>
+        <a class="gallery-open-btn" href="${publicUrl}" target="_blank">
+          ↗ Open full size
+        </a>
+      </div>
+      <span class="item-badge">NEW</span>
+    `;
+
+    // Click to lightbox
+    item.addEventListener('click', (e) => {
+      if (e.target.tagName === 'A') return;
+      openLightbox(src);
+    });
+
+    // Remove "NEW" badge after 3s
+    setTimeout(() => {
+      const badge = item.querySelector('.item-badge');
+      if (badge) badge.remove();
+    }, 3000);
+
+    // Prepend so newest is first
+    gallery.prepend(item);
+  }
+
+  /* ─────────────────────────────────────────
+     CLEAR GALLERY
+  ───────────────────────────────────────── */
+  btnClear.addEventListener('click', () => {
+    gallery.innerHTML = `
+      <div class="gallery-empty">
+        <div class="gallery-empty-icon">🖼</div>
+        <div>No photos yet — capture something!</div>
+      </div>`;
+    setStatus('Gallery cleared.', 'idle');
+  });
+
+  /* ─────────────────────────────────────────
+     AUTO CAPTURE
+  ───────────────────────────────────────── */
+  btnAuto.addEventListener('click', () => {
+    if (isAutoActive) {
+      stopAutoCapture();
+    } else {
+      startAutoCapture();
+    }
+  });
+
+  function startAutoCapture() {
+    const seconds = Math.max(1, parseInt(inpInterval.value) || 2);
+    isAutoActive  = true;
+
+    // Update button UI
+    btnAuto.textContent = `⏱ Auto Capture: ON (${seconds}s)`;
+    btnAuto.classList.add('active');
+    autoBadge.parentElement.classList.add('auto-active');
+    document.getElementById('video-container').classList.add('auto-active');
+
+    setStatus(`⏱ Auto-capture every ${seconds}s — running…`, 'info');
+
+    autoInterval = setInterval(() => {
+      captureAndUpload();
+    }, seconds * 1000);
+  }
+
+  function stopAutoCapture() {
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+    }
+    isAutoActive = false;
+
+    btnAuto.textContent = '⏱ Auto Capture: OFF';
+    btnAuto.classList.remove('active');
+    document.getElementById('video-container').classList.remove('auto-active');
+
+    setStatus('Auto-capture stopped.', 'idle');
+  }
+
+  /* ─────────────────────────────────────────
+     LIGHTBOX
+  ───────────────────────────────────────── */
+  function openLightbox(src) {
+    lightboxImg.src = src;
+    lightbox.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    lightbox.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  lightboxClose.addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeLightbox();
+  });
+
+  /* ─────────────────────────────────────────
+     CLEANUP ON PAGE LEAVE
+  ───────────────────────────────────────── */
+  window.addEventListener('beforeunload', () => {
+    if (mediaStream) mediaStream.getTracks().forEach(t => t.stop());
+    if (autoInterval) clearInterval(autoInterval);
+  });
+
+</script>
+</body>
+</html>
